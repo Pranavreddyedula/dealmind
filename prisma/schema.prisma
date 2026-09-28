@@ -1,0 +1,144 @@
+// DealMind — AI Sales Intelligence Agent with persistent Hindsight memory
+// Database: SQLite (file-based). See .env DATABASE_URL.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// ---------------------------------------------------------------------------
+// Application data
+// ---------------------------------------------------------------------------
+
+model Customer {
+  id         String   @id @default(cuid())
+  name       String
+  email     String?  @unique
+  company   String?
+  title     String?
+  phone     String?
+  industry  String?
+  city      String?
+  status    String   @default("lead") // lead | qualified | negotiation | customer | churned
+  dealValue Float    @default(0)
+  notes     String?
+  avatarHue Int      @default(210) // for deterministic avatar color
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  conversations  Conversation[]
+  followUps      FollowUp[]
+  meetingBriefs  MeetingBrief[]
+  memories      Memory[]
+
+  @@index([status])
+  @@index([company])
+}
+
+model Conversation {
+  id           String   @id @default(cuid())
+  customerId   String
+  customer     Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  title        String
+  channel      String   @default("meeting") // meeting | call | email | chat
+  summary      String?
+  sentiment    String?  // positive | neutral | negative | mixed
+  createdAt    DateTime @default(now())
+
+  messages Message[]
+  followUps FollowUp[]
+
+  @@index([customerId])
+  @@index([createdAt])
+}
+
+model Message {
+  id             String   @id @default(cuid())
+  conversationId String
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  role           String   // customer | salesperson | agent | note
+  content        String
+  createdAt      DateTime @default(now())
+
+  @@index([conversationId])
+}
+
+// Local memory store — mirrors what has been retained into Hindsight so the
+// UI can render a timeline even when the Hindsight daemon is offline. This is
+// NOT the source of truth when a real Hindsight daemon is connected; it is a
+// durable echo + the Tier-C fallback implementation backend.
+model Memory {
+  id          String   @id @default(cuid())
+  customerId  String
+  customer    Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  bankId      String   // Hindsight bank id (= "customer:" + customerId)
+  content     String   // the retained text
+  context     String?  // optional conversation/context label
+  source      String   @default("conversation") // conversation | note | import | agent
+  type        String?  // observation | preference | objection | competitor | requirement | fact
+  mentionedAt DateTime @default(now()) // when the fact occurred (per Hindsight `mentioned_at`)
+  metadataJson String? // JSON-encoded metadata
+  createdAt   DateTime @default(now()) // when retained
+
+  @@index([customerId])
+  @@index([bankId])
+  @@index([mentionedAt])
+  @@index([type])
+}
+
+model FollowUp {
+  id             String   @id @default(cuid())
+  customerId     String
+  customer       Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  conversationId String?
+  conversation   Conversation? @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  channel        String   @default("email") // email | call | linkedin | meeting
+  message        String   // generated follow-up copy
+  status         String   @default("pending") // pending | sent | done | snoozed
+  dueAt          DateTime?
+  createdAt      DateTime @default(now())
+
+  @@index([customerId])
+  @@index([status])
+}
+
+model MeetingBrief {
+  id          String   @id @default(cuid())
+  customerId  String
+  customer    Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  query       String   // the request, e.g. "Prepare me for my next meeting with Rahul"
+  mode        String   // with-memory | without-memory
+  briefing    String   // markdown briefing
+  memoryUsedJson String? // JSON: array of recalled memory snippets actually used
+  latencyMs   Int      @default(0)
+  createdAt   DateTime @default(now())
+
+  @@index([customerId])
+  @@index([mode])
+}
+
+// Audit log of Hindsight / agent operations (retain, recall, reflect, generate).
+model AgentLog {
+  id        String   @id @default(cuid())
+  action    String   // retain | recall | reflect | meeting-prep | followup | qa
+  bankId    String?
+  query     String?
+  mode      String?  // with-memory | without-memory | local | remote
+  success   Boolean  @default(true)
+  error     String?
+  resultJson String?
+  latencyMs Int      @default(0)
+  createdAt DateTime @default(now())
+
+  @@index([action])
+  @@index([createdAt])
+}
+
+model Settings {
+  id    String   @id
+  value String
+}
