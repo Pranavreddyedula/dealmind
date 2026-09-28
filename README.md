@@ -1,6 +1,9 @@
 # DealMind
 
 > **An AI sales intelligence agent with persistent Hindsight memory — so every meeting starts prepared.**
+## 🚀 Live Demo
+
+[**Open DealMind Live Demo →**](https://dealmindaisales.space-z.ai/)
 
 DealMind retains and recalls everything said across every conversation with a customer, using the real [Hindsight](https://github.com/vectorize-io/hindsight) memory system, and grounds every meeting briefing, follow-up, and Q&A in those retained memories. A vanilla CRM + LLM gives you a generic briefing; DealMind gives you one that is unmistakably about *that* customer.
 
